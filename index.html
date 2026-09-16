@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>השוואת 3 מצבי Fit ברגרסיה</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1450px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        p.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 20px; }
+        
+        .top-controls {
+            display: flex;
+            gap: 20px;
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 8px;
+            align-items: center;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            border: 1px solid #e9ecef;
+            flex-wrap: wrap;
+        }
+        .control-item { display: flex; align-items: center; gap: 10px; }
+        .control-item label { font-weight: bold; }
+        .val-disp { font-weight: bold; color: #2980b9; width: 45px; }
+        
+        .btn {
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #2980b9; }
+
+        .plots-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        @media (max-width: 950px) {
+            .plots-grid { grid-template-columns: 1fr; }
+        }
+
+        .plot-card {
+            background: #fff;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            padding: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .plot-card.underfit { border-color: #e67e22; }
+        .plot-card.justright { border-color: #2ecc71; }
+        .plot-card.overfit { border-color: #e74c3c; }
+
+        .card-header {
+            text-align: center;
+            padding: 8px;
+            border-radius: 5px;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+        .underfit .card-header { background-color: #e67e22; }
+        .justright .card-header { background-color: #2ecc71; }
+        .overfit .card-header { background-color: #e74c3c; }
+
+        .plot-box { width: 100%; height: 420px; }
+
+        .card-stats {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .stat-val { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>השוואת 3 מצבי התאמה (Fit) ברגרסיה</h1>
+    <p class="subtitle">השוואת ערכי חיזוי (⭐) מול ערכים אמיתיים (🟢) בזמן אמת</p>
+
+    <!-- סרגל שליטה עליון -->
+    <div class="top-controls">
+        <div class="control-item">
+            <label for="noiseSlider">פיזור רעש (ציר Y):</label>
+            <input type="range" id="noiseSlider" min="10" max="250" step="10" value="100">
+            <span id="noiseVal" class="val-disp">100</span>
+        </div>
+
+        <div class="control-item">
+            <label for="predictXSlider">🎯 חיזוי עבור X:</label>
+            <input type="range" id="predictXSlider" min="0" max="1" step="0.01" value="0.85">
+            <span id="predictXVal" class="val-disp">0.85</span>
+        </div>
+
+        <button class="btn" onclick="generateDataAndRedraw()">ייצר נתונים חדשים</button>
+    </div>
+
+    <!-- גריד של 3 הגרפים -->
+    <div class="plots-grid">
+        
+        <!-- 1. Underfitting -->
+        <div class="plot-card underfit">
+            <div class="card-header">Underfitting (פולינום דרגה 1)</div>
+            <div id="plotUnderfit" class="plot-box"></div>
+            <div class="card-stats">
+                <div class="stat-row"><span>Train MSE:</span><span id="trainMse1" class="stat-val">-</span></div>
+                <div class="stat-row"><span>Test MSE:</span><span id="testMse1" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#8e44ad;"><span>Y חזוי (⭐):</span><span id="predY1" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#27ae60;"><span>Y אמיתי (🟢):</span><span id="trueY1" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#c0392b;"><span>שגיאת חיזוי:</span><span id="errY1" class="stat-val">-</span></div>
+            </div>
+        </div>
+
+        <!-- 2. Just Right -->
+        <div class="plot-card justright">
+            <div class="card-header">Just Right! (פולינום דרגה 2)</div>
+            <div id="plotJustRight" class="plot-box"></div>
+            <div class="card-stats">
+                <div class="stat-row"><span>Train MSE:</span><span id="trainMse2" class="stat-val">-</span></div>
+                <div class="stat-row"><span>Test MSE:</span><span id="testMse2" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#8e44ad;"><span>Y חזוי (⭐):</span><span id="predY2" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#27ae60;"><span>Y אמיתי (🟢):</span><span id="trueY2" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#c0392b;"><span>שגיאת חיזוי:</span><span id="errY2" class="stat-val">-</span></div>
+            </div>
+        </div>
+
+        <!-- 3. Overfitting -->
+        <div class="plot-card overfit">
+            <div class="card-header">Overfitting (פולינום דרגה 12 - מחבר נקודות)</div>
+            <div id="plotOverfit" class="plot-box"></div>
+            <div class="card-stats">
+                <div class="stat-row"><span>Train MSE:</span><span id="trainMse3" class="stat-val">-</span></div>
+                <div class="stat-row"><span>Test MSE:</span><span id="testMse3" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#8e44ad;"><span>Y חזוי (⭐):</span><span id="predY3" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#27ae60;"><span>Y אמיתי (🟢):</span><span id="trueY3" class="stat-val">-</span></div>
+                <div class="stat-row" style="color:#c0392b;"><span>שגיאת חיזוי:</span><span id="errY3" class="stat-val">-</span></div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    let trainData = [];
+    let testData = [];
+    let globalYMin = -10;
+    let globalYMax = 80;
+
+    function trueFunction(x) {
+        return 35 * Math.pow(x - 0.45, 2) + 20;
+    }
+
+    function generateDataset() {
+        trainData = [];
+        testData = [];
+        const noiseScale = parseInt(document.getElementById('noiseSlider').value) / 2.5;
+        
+        for (let i = 0; i < 14; i++) {
+            let x = (i / 13) * 0.96 + 0.02;
+            let y = trueFunction(x) + (Math.random() - 0.5) * noiseScale;
+            trainData.push({x: x, y: y});
+        }
+        for (let i = 0; i < 8; i++) {
+            let x = Math.random();
+            let y = trueFunction(x) + (Math.random() - 0.5) * noiseScale;
+            testData.push({x: x, y: y});
+        }
+        trainData.sort((a, b) => a.x - b.x);
+        testData.sort((a, b) => a.x - b.x);
+
+        const allY = [...trainData, ...testData].map(p => p.y);
+        const minY = Math.min(...allY);
+        const maxY = Math.max(...allY);
+        const padding = (maxY - minY) * 0.25 + 10;
+        globalYMin = Math.floor(minY - padding);
+        globalYMax = Math.ceil(maxY + padding);
+    }
+
+    function fitPolynomial(data, degree) {
+        const n = data.length;
+        const k = degree + 1;
+        let X = Array.from({length: n}, () => Array(k).fill(0));
+        let Y = Array(n).fill(0);
+
+        for (let i = 0; i < n; i++) {
+            Y[i] = data[i].y;
+            for (let j = 0; j < k; j++) X[i][j] = Math.pow(data[i].x, j);
+        }
+
+        let XtX = Array.from({length: k}, () => Array(k).fill(0));
+        let XtY = Array(k).fill(0);
+
+        for (let i = 0; i < k; i++) {
+            for (let j = 0; j < k; j++) {
+                for (let l = 0; l < n; l++) XtX[i][j] += X[l][i] * X[l][j];
+            }
+            for (let l = 0; l < n; l++) XtY[i] += X[l][i] * Y[l];
+        }
+
+        for (let i = 0; i < k; i++) {
+            let maxEl = Math.abs(XtX[i][i]), maxRow = i;
+            for (let kRow = i + 1; kRow < k; kRow++) {
+                if (Math.abs(XtX[kRow][i]) > maxEl) {
+                    maxEl = Math.abs(XtX[kRow][i]);
+                    maxRow = kRow;
+                }
+            }
+            for (let kCol = i; kCol < k; kCol++) {
+                let tmp = XtX[maxRow][kCol];
+                XtX[maxRow][kCol] = XtX[i][kCol];
+                XtX[i][kCol] = tmp;
+            }
+            let tmp = XtY[maxRow];
+            XtY[maxRow] = XtY[i];
+            XtY[i] = tmp;
+
+            if (Math.abs(XtX[i][i]) < 1e-12) continue;
+
+            for (let kRow = i + 1; kRow < k; kRow++) {
+                let c = -XtX[kRow][i] / XtX[i][i];
+                for (let kCol = i; kCol < k; kCol++) {
+                    if (i === kCol) XtX[kRow][kCol] = 0;
+                    else XtX[kRow][kCol] += c * XtX[i][kCol];
+                }
+                XtY[kRow] += c * XtY[i];
+            }
+        }
+
+        let coeffs = Array(k).fill(0);
+        for (let i = k - 1; i >= 0; i--) {
+            let c = XtY[i];
+            for (let j = i + 1; j < k; j++) c -= XtX[i][j] * coeffs[j];
+            coeffs[i] = c / (XtX[i][i] || 1e-12);
+        }
+        return coeffs;
+    }
+
+    function predictPoly(x, coeffs) {
+        return coeffs.reduce((sum, c, i) => sum + c * Math.pow(x, i), 0);
+    }
+
+    function calculateMSE(data, coeffs) {
+        let err = 0;
+        data.forEach(p => err += Math.pow(p.y - predictPoly(p.x, coeffs), 2));
+        return err / data.length;
+    }
+
+    function renderSinglePlot(elementId, degree, predX, trainMseId, testMseId, predYId, trueYId, errYId) {
+        const coeffs = fitPolynomial(trainData, degree);
+        const xCurve = Array.from({length: 300}, (_, i) => i / 299);
+        const yCurve = xCurve.map(x => predictPoly(x, coeffs));
+        
+        const predY = predictPoly(predX, coeffs);
+        const trueY = trueFunction(predX);
+        const errorVal = Math.abs(predY - trueY);
+
+        // עקומת המודל
+        const modelTrace = { 
+            x: xCurve, 
+            y: yCurve, 
+            mode: 'lines', 
+            line: { color: '#2980b9', width: 3 }, 
+            showlegend: false 
+        };
+        
+        // נקודות אימון
+        const trainTrace = { 
+            x: trainData.map(p => p.x), 
+            y: trainData.map(p => p.y), 
+            mode: 'markers', 
+            marker: { color: '#e67e22', symbol: 'square', size: 9, line: { color: '#d35400', width: 1 } }, 
+            showlegend: false 
+        };
+        
+        // קו מחבר בין החיזוי לערך האמיתי (הצגת השגיאה)
+        const errorLineTrace = {
+            x: [predX, predX],
+            y: [predY, trueY],
+            mode: 'lines',
+            line: { color: '#e74c3c', width: 2, dash: 'dot' },
+            showlegend: false
+        };
+
+        // נקודת חיזוי של המודל (כוכב סגול)
+        const predTrace = { 
+            x: [predX], 
+            y: [predY], 
+            mode: 'markers', 
+            name: 'חיזוי המודל',
+            marker: { color: '#8e44ad', symbol: 'star', size: 16, line: { color: '#4a235a', width: 1 } }, 
+            showlegend: false 
+        };
+
+        // נקודת הערך האמיתי של הפונקציה (עיגול ירוק)
+        const trueTrace = { 
+            x: [predX], 
+            y: [trueY], 
+            mode: 'markers', 
+            name: 'ערך אמיתי',
+            marker: { color: '#27ae60', symbol: 'circle', size: 12, line: { color: '#1e8449', width: 1.5 } }, 
+            showlegend: false 
+        };
+
+        const layout = {
+            margin: { t: 15, l: 45, r: 15, b: 35 },
+            xaxis: { range: [-0.05, 1.05], zeroline: false, title: 'X' },
+            yaxis: { range: [globalYMin, globalYMax], zeroline: true, title: 'Y' }
+        };
+
+        Plotly.react(elementId, [modelTrace, trainTrace, errorLineTrace, predTrace, trueTrace], layout, {displayModeBar: false});
+
+        document.getElementById(trainMseId).innerText = calculateMSE(trainData, coeffs).toFixed(3);
+        document.getElementById(testMseId).innerText = calculateMSE(testData, coeffs).toFixed(3);
+        document.getElementById(predYId).innerText = predY.toFixed(3);
+        document.getElementById(trueYId).innerText = trueY.toFixed(3);
+        document.getElementById(errYId).innerText = errorVal.toFixed(3);
+    }
+
+    function updateAllPlots() {
+        const predX = parseFloat(document.getElementById('predictXSlider').value);
+        document.getElementById('predictXVal').innerText = predX.toFixed(2);
+        document.getElementById('noiseVal').innerText = document.getElementById('noiseSlider').value;
+
+        renderSinglePlot('plotUnderfit', 1, predX, 'trainMse1', 'testMse1', 'predY1', 'trueY1', 'errY1');
+        renderSinglePlot('plotJustRight', 2, predX, 'trainMse2', 'testMse2', 'predY2', 'trueY2', 'errY2');
+        renderSinglePlot('plotOverfit', 12, predX, 'trainMse3', 'testMse3', 'predY3', 'trueY3', 'errY3');
+    }
+
+    function generateDataAndRedraw() {
+        generateDataset();
+        updateAllPlots();
+    }
+
+    document.getElementById('noiseSlider').addEventListener('change', generateDataAndRedraw);
+    document.getElementById('predictXSlider').addEventListener('input', updateAllPlots);
+
+    generateDataAndRedraw();
+</script>
+
+</body>
+</html>
